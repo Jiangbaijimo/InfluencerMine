@@ -96,7 +96,7 @@ def fetch_daren_data_by_page(page_num: int) -> Dict[str, Any]:
 
 def parse_author_data(author: Dict[str, Any]) -> Dict[str, Any]:
     """
-    解析单个达人的数据，提取我们关心的字段。
+    解析单个达人的数据，提取我们关心的字段，并新增“达人类型”字段。
 
     Args:
         author (dict): 原始的达人数据字典。
@@ -121,6 +121,23 @@ def parse_author_data(author: Dict[str, Any]) -> Dict[str, Any]:
         "电商等级 (author_ecom_level)": attr_data.get('author_ecom_level', ''),
         "内容主题标签 (content_theme_labels_180d)": attr_data.get('content_theme_labels_180d', ''),
     }
+
+    # --- 新增代码：提取达人类型 ---
+    # 从 attribute_datas 中获取 tags_relation 字符串
+    tags_relation_str = attr_data.get('tags_relation', '{}')
+    try:
+        # 将 JSON 字符串解析为 Python 字典
+        tags_relation_dict = json.loads(tags_relation_str)
+        # 提取字典的所有键（Key）作为达人类型，转换为列表
+        达人类型列表 = list(tags_relation_dict.keys())
+    except (json.JSONDecodeError, TypeError):
+        # 如果解析失败或不是字典，则返回空列表
+        达人类型列表 = []
+
+    # 将达人类型列表添加到解析后的数据中
+    parsed_data["达人类型 (tags)"] = 达人类型列表
+    # -----------------------------
+
     return parsed_data
 
 def save_to_csv(data: List[Dict[str, Any]], filename: str = "daren_data_test.csv"):

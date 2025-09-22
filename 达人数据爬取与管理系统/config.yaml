@@ -1,0 +1,234 @@
+# 达人数据爬取与管理系统 - 配置文件
+# 创建时间: 2025-01-23
+
+# 数据库配置
+database:
+  host: localhost
+  port: 3306
+  user: root
+  password: ""
+  database: influencer_crawler
+  charset: utf8mb4
+  pool_size: 10
+  pool_recycle: 3600
+
+# 爬虫配置
+crawler:
+  # 请求配置
+  request:
+    timeout: 30
+    max_retries: 3
+    retry_delay: 5
+    user_agent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+    
+  # 爬取配置
+  crawl:
+    default_start_page: 1
+    default_end_page: 10
+    page_size: 20
+    concurrent_requests: 3
+    request_interval: 2
+    
+  # 数据保存配置
+  data:
+    output_dir: "data"
+    csv_encoding: "utf-8-sig"
+    backup_enabled: true
+    backup_dir: "backup"
+
+# 账号管理配置
+account:
+  # 账号轮换配置
+  rotation:
+    enabled: true
+    rotation_interval: 1800  # 30分钟
+    cooldown_period: 300     # 5分钟
+    max_failures_before_ban: 5
+    
+  # 健康检查配置
+  health_check:
+    enabled: true
+    check_interval: 3600     # 1小时
+    failure_rate_threshold: 0.5  # 50%失败率阈值
+    min_requests_for_check: 10
+
+# 任务调度配置
+scheduler:
+  # 工作线程配置
+  workers:
+    max_workers: 3
+    worker_timeout: 3600
+    
+  # 任务重试配置
+  retry:
+    max_retries: 3
+    retry_delay: 1800        # 30分钟后重试
+    exponential_backoff: true
+    
+  # 定时任务配置
+  scheduled_tasks:
+    health_check:
+      enabled: true
+      cron: "0 2 * * *"       # 每天凌晨2点
+      
+    cleanup:
+      enabled: true
+      cron: "0 3 * * 0"       # 每周日凌晨3点
+      log_retention_days: 30
+      
+    auto_crawl:
+      enabled: false
+      cron: "0 1 * * *"       # 每天凌晨1点
+      pages_per_run: 50
+
+# 日志配置
+logging:
+  level: INFO
+  format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+  
+  # 文件日志配置
+  file:
+    enabled: true
+    dir: "logs"
+    max_size: "10MB"
+    backup_count: 5
+    rotation: "daily"
+    
+  # 控制台日志配置
+  console:
+    enabled: true
+    colored: true
+    
+  # 特定模块日志级别
+  loggers:
+    requests: WARNING
+    urllib3: WARNING
+    pymysql: WARNING
+
+# 数据处理配置
+data_processing:
+  # 数据验证配置
+  validation:
+    enabled: true
+    strict_mode: false
+    required_fields: ["daoren_id", "nickname", "fans_count"]
+    
+  # 数据清洗配置
+  cleaning:
+    remove_duplicates: true
+    normalize_text: true
+    validate_numbers: true
+    
+  # 批处理配置
+  batch:
+    batch_size: 1000
+    commit_interval: 100
+
+# 达人类型配置
+daoren_types:
+  # 预定义达人类型
+  predefined:
+    - name: "美食博主"
+      keywords: ["美食", "料理", "烹饪", "餐厅", "小吃"]
+      
+    - name: "时尚博主"
+      keywords: ["时尚", "穿搭", "美妆", "护肤", "潮流"]
+      
+    - name: "旅游博主"
+      keywords: ["旅游", "旅行", "景点", "攻略", "民宿"]
+      
+    - name: "科技博主"
+      keywords: ["科技", "数码", "手机", "电脑", "AI"]
+      
+    - name: "生活博主"
+      keywords: ["生活", "日常", "家居", "收纳", "好物"]
+      
+    - name: "健身博主"
+      keywords: ["健身", "运动", "瑜伽", "减肥", "塑形"]
+      
+    - name: "教育博主"
+      keywords: ["教育", "学习", "知识", "技能", "培训"]
+      
+    - name: "娱乐博主"
+      keywords: ["娱乐", "搞笑", "段子", "明星", "八卦"]
+      
+  # 分类配置
+  classification:
+    enabled: true
+    min_confidence: 0.6
+    max_types_per_daoren: 3
+    unknown_type_name: "其他"
+
+# 监控和报警配置
+monitoring:
+  # 性能监控
+  performance:
+    enabled: true
+    metrics_interval: 300    # 5分钟
+    
+  # 错误监控
+  error:
+    enabled: true
+    error_threshold: 10      # 10个错误后报警
+    
+  # 报警配置
+  alerts:
+    enabled: false
+    email:
+      smtp_server: ""
+      smtp_port: 587
+      username: ""
+      password: ""
+      recipients: []
+      
+    webhook:
+      enabled: false
+      url: ""
+      timeout: 10
+
+# 安全配置
+security:
+  # API密钥管理
+  api_keys:
+    encryption_enabled: false
+    key_rotation_days: 90
+    
+  # 访问控制
+  access_control:
+    ip_whitelist: []
+    rate_limiting:
+      enabled: false
+      requests_per_minute: 60
+      
+  # 数据脱敏
+  data_masking:
+    enabled: false
+    mask_phone: true
+    mask_email: true
+
+# 扩展配置
+extensions:
+  # 插件配置
+  plugins:
+    enabled: false
+    plugin_dir: "plugins"
+    
+  # API配置
+  api:
+    enabled: false
+    host: "0.0.0.0"
+    port: 8000
+    debug: false
+    
+  # Web界面配置
+  web_ui:
+    enabled: false
+    host: "0.0.0.0"
+    port: 8080
+    
+# 开发配置
+development:
+  debug: false
+  profiling: false
+  mock_data: false
+  test_mode: false
