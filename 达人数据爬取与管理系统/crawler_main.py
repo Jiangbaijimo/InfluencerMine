@@ -347,21 +347,43 @@ class DarenCrawler:
     def parse_author_data(self, author: Dict[str, Any], page_num: int) -> Dict[str, Any]:
         """解析单个达人的数据"""
         attr_data = author.get('attribute_datas', {})
-        task_info = author.get('task_infos', [{}])[0]
-        price_info = task_info.get('price_infos', [{}])[0]
+        
+        # 安全获取task_info，避免list index out of range错误
+        task_infos = author.get('task_infos', [])
+        task_info = task_infos[0] if task_infos else {}
+        
+        # 安全获取price_info，避免list index out of range错误
+        price_infos = task_info.get('price_infos', [])
+        price_info = price_infos[0] if price_infos else {}
+        
+        # 安全获取数值，避免None和NaN
+        def safe_get_number(data, key, default=0):
+            value = data.get(key, default)
+            if value is None or str(value).lower() == 'nan':
+                return default
+            try:
+                return int(value) if isinstance(value, (int, float)) and value == int(value) else float(value)
+            except (ValueError, TypeError):
+                return default
+                
+        def safe_get_string(data, key, default=''):
+            value = data.get(key, default)
+            if value is None or str(value).lower() == 'nan':
+                return default
+            return str(value).strip()
         
         # 提取核心字段
         parsed_data = {
-            "达人ID (star_id)": author.get('star_id', ''),
-            "昵称 (nick_name)": attr_data.get('nick_name', ''),
-            "粉丝数 (follower)": attr_data.get('follower', 0),
-            "所在地 (city)": attr_data.get('city', ''),
-            "近30天平均播放量 (vv_median_30d)": attr_data.get('vv_median_30d', 0),
-            "近30天互动率 (interact_rate_within_30d)": attr_data.get('interact_rate_within_30d', 0),
-            "报价 (price)": price_info.get('price', 0),
-            "星图指数 (star_index)": attr_data.get('star_index', 0),
-            "电商等级 (author_ecom_level)": attr_data.get('author_ecom_level', ''),
-            "内容主题标签 (content_theme_labels_180d)": attr_data.get('content_theme_labels_180d', ''),
+            "达人ID (star_id)": safe_get_string(author, 'star_id'),
+            "昵称 (nick_name)": safe_get_string(attr_data, 'nick_name'),
+            "粉丝数 (follower)": safe_get_number(attr_data, 'follower', 0),
+            "所在地 (city)": safe_get_string(attr_data, 'city'),
+            "近30天平均播放量 (vv_median_30d)": safe_get_number(attr_data, 'vv_median_30d', 0),
+            "近30天互动率 (interact_rate_within_30d)": safe_get_number(attr_data, 'interact_rate_within_30d', 0.0),
+            "报价 (price)": safe_get_number(price_info, 'price', 0),
+            "星图指数 (star_index)": safe_get_number(attr_data, 'star_index', 0),
+            "电商等级 (author_ecom_level)": safe_get_string(attr_data, 'author_ecom_level'),
+            "内容主题标签 (content_theme_labels_180d)": safe_get_string(attr_data, 'content_theme_labels_180d'),
             "页码": page_num,
             "爬取日期": date.today().strftime('%Y-%m-%d')
         }
@@ -369,9 +391,15 @@ class DarenCrawler:
         # 提取达人类型
         tags_relation_str = attr_data.get('tags_relation', '{}')
         try:
+            # 安全处理tags_relation字段
+            if tags_relation_str is None or str(tags_relation_str).lower() == 'nan':
+                tags_relation_str = '{}'
+            elif not isinstance(tags_relation_str, str):
+                tags_relation_str = str(tags_relation_str)
+                
             tags_relation_dict = json.loads(tags_relation_str)
-            达人类型列表 = list(tags_relation_dict.keys())
-        except (json.JSONDecodeError, TypeError):
+            达人类型列表 = [tag for tag in tags_relation_dict.keys() if tag and str(tag).strip()]
+        except (json.JSONDecodeError, TypeError, AttributeError):
             达人类型列表 = []
             
         parsed_data["达人类型 (tags)"] = 达人类型列表
@@ -387,28 +415,50 @@ class DarenCrawler:
         tags = author_data.get("达人类型 (tags)", [])
         nick_name = author_data.get("昵称 (nick_name)", "未知昵称")
         
+        # 确保nick_name不是NaN或None
+        if not nick_name or str(nick_name).lower() == 'nan':
+            nick_name = "未知昵称"
+        
         # 清理文件名中的特殊字符
-        safe_nick_name = "".join(c for c in nick_name if c.isalnum() or c in (' ', '-', '_')).strip()
+        safe_nick_name = "".join(c for c in str(nick_name) if c.isalnum() or c in (' ', '-', '_')).strip()
         if not safe_nick_name:
             safe_nick_name = f"达人_{author_data.get('达人ID (star_id)', 'unknown')}"
             
         # 如果没有类型，默认存入 "未分类"
-        if not tags:
+        if not tags or not isinstance(tags, list):
             tags = ["未分类"]
             
         for tag in tags:
+            # 确保tag是有效字符串
+            if not tag or str(tag).lower() == 'nan':
+                tag = "未分类"
+            tag = str(tag).strip()
+            
             folder_path = f"data_by_type/{tag}"
             self.ensure_directory(folder_path)
             
             filename = f"{tag}-{safe_nick_name}-第{page_num}页-{crawl_date}.csv"
             filepath = os.path.join(folder_path, filename)
             
+            # 清理数据中的NaN值
+            clean_data = {}
+            for key, value in author_data.items():
+                if value is None or str(value).lower() == 'nan':
+                    if key in ['粉丝数 (follower)', '近30天平均播放量 (vv_median_30d)', '报价 (price)', '星图指数 (star_index)', '页码']:
+                        clean_data[key] = 0
+                    elif key == '近30天互动率 (interact_rate_within_30d)':
+                        clean_data[key] = 0.0
+                    else:
+                        clean_data[key] = ''
+                else:
+                    clean_data[key] = value
+            
             # 写入单条记录
             try:
                 with open(filepath, 'w', newline='', encoding='utf-8-sig') as f:
-                    writer = csv.DictWriter(f, fieldnames=author_data.keys())
+                    writer = csv.DictWriter(f, fieldnames=clean_data.keys())
                     writer.writeheader()
-                    writer.writerow(author_data)
+                    writer.writerow(clean_data)
                     
                 self.logger.debug(f"保存达人数据: {filepath}")
                 

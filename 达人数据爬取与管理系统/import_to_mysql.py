@@ -77,7 +77,9 @@ class DataImporter:
         required_fields = ['达人ID (star_id)', '昵称 (nick_name)']
         
         for field in required_fields:
-            if not record.get(field):
+            value = record.get(field)
+            # 处理NaN值和空值
+            if pd.isna(value) or not value or str(value).strip() == '' or str(value).lower() == 'nan':
                 self.logger.warning(f"记录缺少必要字段 {field}: {record}")
                 return False
                 
@@ -92,20 +94,38 @@ class DataImporter:
         
         for field in numeric_fields:
             value = record.get(field)
-            if value and not str(value).replace('.', '').replace('-', '').isdigit():
-                try:
-                    float(value)
-                except (ValueError, TypeError):
-                    self.logger.warning(f"字段 {field} 数值格式错误: {value}")
+            # 处理NaN、None和空值
+            if pd.isna(value) or value is None or str(value).lower() == 'nan':
+                record[field] = 0
+                continue
+                
+            # 处理字符串类型的数值
+            if isinstance(value, str):
+                value = value.strip()
+                if not value or not value.replace('.', '').replace('-', '').isdigit():
+                    try:
+                        float(value)
+                    except (ValueError, TypeError):
+                        self.logger.warning(f"字段 {field} 数值格式错误: {value}")
+                        record[field] = 0
+            # 处理float类型
+            elif isinstance(value, (int, float)):
+                if pd.isna(value):
                     record[field] = 0
                     
         return True
         
     def parse_json_field(self, value: str) -> List[str]:
         """解析JSON字符串字段"""
-        if not value or value.strip() == '':
+        # 处理NaN值、None值和空值
+        if pd.isna(value) or value is None or str(value).lower() == 'nan':
             return []
             
+        if isinstance(value, str):
+            value = value.strip()
+            if not value:
+                return []
+                
         try:
             # 处理不同格式的JSON字符串
             if isinstance(value, str):
@@ -119,6 +139,9 @@ class DataImporter:
                 return json.loads(value)
             elif isinstance(value, list):
                 return value
+            elif isinstance(value, (int, float)):
+                # 处理数值类型，转为字符串列表
+                return [str(value)] if not pd.isna(value) else []
             else:
                 return []
                 
@@ -147,8 +170,30 @@ class DataImporter:
         
         for csv_field, db_field in field_mapping.items():
             value = record.get(csv_field)
+            
+            # 统一处理NaN值、None值和空值
+            if pd.isna(value) or value is None or str(value).lower() == 'nan':
+                value = None
+            elif isinstance(value, str):
+                value = value.strip()
+                if not value:
+                    value = None
+            
+            # 根据字段类型设置值或默认值
             if value is not None and value != '':
-                processed[db_field] = value
+                # 数值字段类型转换
+                if db_field in ['follower', 'vv_median_30d', 'price', 'star_index', 'page_num']:
+                    try:
+                        processed[db_field] = int(float(str(value))) if value else 0
+                    except (ValueError, TypeError):
+                        processed[db_field] = 0
+                elif db_field == 'interact_rate_within_30d':
+                    try:
+                        processed[db_field] = float(str(value)) if value else 0.0
+                    except (ValueError, TypeError):
+                        processed[db_field] = 0.0
+                else:
+                    processed[db_field] = str(value) if value else None
             else:
                 # 设置默认值
                 if db_field in ['follower', 'vv_median_30d', 'price', 'star_index', 'page_num']:
