@@ -299,12 +299,6 @@ class AsyncDarenCrawler:
             "attribute_filter": [
                 {
                     "field": {
-                        "field_name": "tag_level_two"
-                    },
-                    "field_value": "[2]"
-                },
-                {
-                    "field": {
                         "field_name": "price_by_video_type__ge",
                         "rel_id": "2"
                     },
@@ -628,7 +622,7 @@ class AsyncDarenCrawler:
                 
                 completed_pages = 0
                 empty_pages = 0
-                consecutive_empty = 0
+                page_results = {}  # 存储页面结果，用于按顺序检查连续空页面
                 
                 # 处理完成的任务
                 for future in as_completed(future_to_page):
@@ -637,20 +631,38 @@ class AsyncDarenCrawler:
                         page_num, total_count, success_count, failed_count = future.result()
                         completed_pages += 1
                         
-                        # 检查是否连续遇到空页面
+                        # 存储页面结果
+                        page_results[page_num] = total_count
+                        
+                        # 统计空页面
                         if total_count == 0:
                             empty_pages += 1
-                            consecutive_empty += 1
-                        else:
-                            consecutive_empty = 0
                             
-                        # 如果连续3页都是空的，可能已经到达数据末尾
-                        if consecutive_empty >= 3:
-                            self.logger.info(f"连续 {consecutive_empty} 页无数据，可能已到达数据末尾")
-                            # 取消剩余任务
-                            for remaining_future in future_to_page:
-                                if not remaining_future.done():
-                                    remaining_future.cancel()
+                        # 检查是否有连续的空页面（按页码顺序）
+                        consecutive_empty = 0
+                        max_page_checked = min(page_results.keys()) if page_results else actual_start_page
+                        
+                        # 从最小页码开始检查连续空页面
+                        for check_page in range(max_page_checked, end_page + 1):
+                            if check_page in page_results:
+                                if page_results[check_page] == 0:
+                                    consecutive_empty += 1
+                                else:
+                                    consecutive_empty = 0
+                                    
+                                # 如果连续5页都是空的，且已经爬取了至少10页，可能已经到达数据末尾
+                                if consecutive_empty >= 5 and completed_pages >= 10:
+                                    self.logger.info(f"连续 {consecutive_empty} 页无数据，可能已到达数据末尾")
+                                    # 取消剩余任务
+                                    for remaining_future in future_to_page:
+                                        if not remaining_future.done():
+                                            remaining_future.cancel()
+                                    break
+                            else:
+                                break  # 还有页面未完成，无法判断连续性
+                                
+                        # 如果触发了提前停止，跳出主循环
+                        if consecutive_empty >= 5 and completed_pages >= 10:
                             break
                             
                         # 定期更新进度
