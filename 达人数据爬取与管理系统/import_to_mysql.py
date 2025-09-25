@@ -481,7 +481,7 @@ def main():
             importer.update_domain_table()
             
         # 创建导出日志
-        importer.create_export_log('import', args.domain_filter)
+        importer.create_export_log('csv', args.domain_filter)
         
         # 打印统计信息
         importer.print_stats()
