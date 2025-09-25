@@ -539,10 +539,10 @@ class DarenCrawler:
                 
                 self.logger.info(f"✅ 第 {page} 页处理完成，成功: {page_success}, 总计: {len(authors)}")
                 
-                # 检查是否还有更多数据
-                has_more = raw_data.get('pagination', {}).get('has_more', False)
-                if not has_more:
-                    self.logger.info("已到达最后一页，停止爬取")
+                # 检查是否还有更多数据 - 只有在返回的数据为空时才停止
+                # 不依赖has_more字段，因为API可能错误返回False
+                if len(authors) == 0:
+                    self.logger.info("当前页无数据，已到达最后一页，停止爬取")
                     break
                     
                 # 随机延迟防反爬
