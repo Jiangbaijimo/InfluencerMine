@@ -20,31 +20,129 @@ CREATE TABLE IF NOT EXISTS daoren_domain (
 
 -- 2. 达人主表（核心表）
 CREATE TABLE IF NOT EXISTS daoren_author (
+    -- 基础身份信息
     star_id BIGINT PRIMARY KEY COMMENT '达人唯一ID',
     nick_name VARCHAR(255) NOT NULL COMMENT '昵称',
-    follower BIGINT DEFAULT 0 COMMENT '粉丝数',
-    city VARCHAR(100) COMMENT '所在地',
-    vv_median_30d BIGINT DEFAULT 0 COMMENT '近30天平均播放量',
-    interact_rate_within_30d DECIMAL(8,6) DEFAULT 0 COMMENT '近30天互动率',
-    price DECIMAL(12,2) DEFAULT 0 COMMENT '报价',
+    core_user_id VARCHAR(50) COMMENT '核心用户ID',
+    avatar_uri TEXT COMMENT '头像链接URL',
+    gender TINYINT COMMENT '性别(1=男,2=女)',
+    city VARCHAR(100) COMMENT '城市',
+    province VARCHAR(100) COMMENT '省份',
+    author_type TINYINT COMMENT '达人类型(1=个人,3=机构)',
+    author_status TINYINT COMMENT '账号状态',
+    grade TINYINT DEFAULT 0 COMMENT '达人等级',
+    
+    -- 粉丝与影响力数据
+    follower BIGINT DEFAULT 0 COMMENT '粉丝总数',
+    fans_increment_within_15d BIGINT DEFAULT 0 COMMENT '15天粉丝增长数',
+    fans_increment_within_30d BIGINT DEFAULT 0 COMMENT '30天粉丝增长数',
+    fans_increment_rate_within_15d DECIMAL(10,8) DEFAULT 0 COMMENT '15天粉丝增长率',
+    interact_rate_within_30d DECIMAL(8,6) DEFAULT 0 COMMENT '30天互动率',
+    interaction_median_30d BIGINT DEFAULT 0 COMMENT '30天互动中位数',
+    play_over_rate_within_30d DECIMAL(8,6) DEFAULT 0 COMMENT '30天播放完成率',
+    vv_median_30d BIGINT DEFAULT 0 COMMENT '30天播放量中位数',
+    
+    -- 内容创作数据
+    star_item_count_within_30d INT DEFAULT 0 COMMENT '30天内星图视频数量',
+    star_video_cnt_90d INT DEFAULT 0 COMMENT '90天星图视频总数',
+    star_video_interact_rate_90d DECIMAL(8,6) DEFAULT 0 COMMENT '90天星图视频互动率',
+    star_video_finish_vv_rate_90d DECIMAL(8,6) DEFAULT 0 COMMENT '90天星图视频完播率',
+    star_video_median_vv_90d BIGINT DEFAULT 0 COMMENT '90天星图视频播放中位数',
+    content_theme_labels_180d JSON COMMENT '180天内容主题标签',
+    tags_relation JSON COMMENT '达人标签关系JSON',
+    
+    -- 商业价值数据
+    price_1_20 DECIMAL(12,2) DEFAULT 0 COMMENT '1-20秒视频报价',
+    price_20_60 DECIMAL(12,2) DEFAULT 0 COMMENT '20-60秒视频报价',
+    price_60 DECIMAL(12,2) DEFAULT 0 COMMENT '60秒以上视频报价',
+    assign_task_price_list VARCHAR(200) COMMENT '指派任务价格区间',
+    expected_play_num BIGINT DEFAULT 0 COMMENT '预期播放量',
+    expected_natural_play_num BIGINT DEFAULT 0 COMMENT '预期自然播放量',
     star_index DECIMAL(10,6) DEFAULT 0 COMMENT '星图指数',
-    author_ecom_level VARCHAR(10) COMMENT '电商等级',
-    content_theme_labels JSON COMMENT '内容主题标签数组',
-    tags JSON COMMENT '达人类型数组，如["美妆", "测评"]',
+    
+    -- CPM成本数据
+    prospective_1_20_cpm DECIMAL(10,4) DEFAULT 0 COMMENT '1-20秒预期CPM',
+    prospective_20_60_cpm DECIMAL(10,4) DEFAULT 0 COMMENT '20-60秒预期CPM',
+    prospective_60_cpm DECIMAL(10,4) DEFAULT 0 COMMENT '60秒以上预期CPM',
+    promotion_prospective_1_20_cpm DECIMAL(10,4) DEFAULT 0 COMMENT '推广1-20秒预期CPM',
+    promotion_prospective_20_60_cpm DECIMAL(10,4) DEFAULT 0 COMMENT '推广20-60秒预期CPM',
+    promotion_prospective_60_cpm DECIMAL(10,4) DEFAULT 0 COMMENT '推广60秒以上预期CPM',
+    promotion_prospective_vv BIGINT DEFAULT 0 COMMENT '推广预期播放量',
+    
+    -- 电商数据
+    e_commerce_enable TINYINT DEFAULT 0 COMMENT '是否开通电商功能',
+    author_ecom_level VARCHAR(10) COMMENT '电商等级(L1-L6)',
+    ecom_gmv_30d_range VARCHAR(50) COMMENT '30天GMV范围',
+    ecom_avg_order_value_30d_range VARCHAR(50) COMMENT '30天平均订单价值',
+    ecom_gpm_30d_range VARCHAR(50) COMMENT '30天毛利率范围',
+    ecom_video_product_num_30d INT DEFAULT 0 COMMENT '30天带货视频数',
+    star_ecom_video_num_30d INT DEFAULT 0 COMMENT '30天星图带货视频数',
+    
+    -- 性能指标
+    link_convert_index DECIMAL(8,2) DEFAULT 0 COMMENT '链接转化指数',
+    link_convert_index_by_industry DECIMAL(8,2) DEFAULT 0 COMMENT '行业链接转化指数',
+    link_shopping_index DECIMAL(8,2) DEFAULT 0 COMMENT '购物指数',
+    link_spread_index DECIMAL(8,2) DEFAULT 0 COMMENT '传播指数',
+    link_spread_index_by_industry DECIMAL(8,2) DEFAULT 0 COMMENT '行业传播指数',
+    link_star_index DECIMAL(8,2) DEFAULT 0 COMMENT '链接星图指数',
+    link_star_index_by_industry DECIMAL(8,2) DEFAULT 0 COMMENT '行业链接星图指数',
+    link_recommend_index_by_industry DECIMAL(8,2) DEFAULT 0 COMMENT '行业推荐指数',
+    search_after_view_index_by_industry DECIMAL(8,2) DEFAULT 0 COMMENT '搜索后观看指数',
+    
+    -- 认证与等级
+    is_excellenct_author TINYINT DEFAULT 0 COMMENT '是否优质达人',
+    star_excellent_author TINYINT DEFAULT 0 COMMENT '星图优质达人标识',
+    author_avatar_frame_icon VARCHAR(20) COMMENT '头像框等级',
+    is_black_horse_author TINYINT DEFAULT 0 COMMENT '是否黑马达人',
+    is_cocreate_author TINYINT DEFAULT 0 COMMENT '是否共创达人',
+    is_cpm_project_author TINYINT DEFAULT 0 COMMENT '是否CPM项目达人',
+    is_short_drama TINYINT DEFAULT 0 COMMENT '是否短剧达人',
+    star_whispers_author TINYINT DEFAULT 0 COMMENT '星图私信达人',
+    local_lower_threshold_author TINYINT DEFAULT 0 COMMENT '本地低门槛达人',
+    
+    -- 其他数据
+    burst_text_rate DECIMAL(6,4) DEFAULT 0 COMMENT '爆文率',
+    brand_boost_vv BIGINT DEFAULT 0 COMMENT '品牌提升播放量',
+    video_brand_boost TINYINT DEFAULT 0 COMMENT '视频品牌提升',
+    video_brand_boost_vv BIGINT DEFAULT 0 COMMENT '视频品牌提升播放量',
+    expected_cpa3_level TINYINT DEFAULT 0 COMMENT '预期CPA3等级',
+    game_type VARCHAR(100) COMMENT '游戏类型',
+    
+    -- 组件数据
+    star_component_install_finish_cnt_90d INT DEFAULT 0 COMMENT '90天组件安装完成数',
+    star_component_link_click_cnt_90d INT DEFAULT 0 COMMENT '90天组件链接点击数',
+    star_video_install_ge_1_cnt_90d INT DEFAULT 0 COMMENT '90天视频安装>=1次数',
+    
+    -- 最新视频数据
+    last_10_items JSON COMMENT '最近10个视频详细数据',
+    items JSON COMMENT '热门视频列表',
+    task_infos JSON COMMENT '任务信息和价格列表',
+    
+    -- 系统字段
     crawled_at DATE NOT NULL COMMENT '爬取日期',
     page_num INT DEFAULT 0 COMMENT '来源页码',
     source_url VARCHAR(500) COMMENT '来源URL',
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
     
-    -- 索引
+    -- 索引优化
     INDEX idx_nick_name (nick_name),
-    INDEX idx_follower (follower),
+    INDEX idx_follower (follower DESC),
     INDEX idx_city (city),
-    INDEX idx_crawled_at (crawled_at),
+    INDEX idx_province (province),
+    INDEX idx_author_type (author_type),
+    INDEX idx_author_ecom_level (author_ecom_level),
+    INDEX idx_star_index (star_index DESC),
+    INDEX idx_price_composite (price_1_20, price_20_60, price_60),
+    INDEX idx_interact_rate (interact_rate_within_30d DESC),
+    INDEX idx_vv_median (vv_median_30d DESC),
+    INDEX idx_crawled_at (crawled_at DESC),
     INDEX idx_page_num (page_num),
-    INDEX idx_created_at (created_at)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='达人主表';
+    INDEX idx_created_at (created_at DESC),
+    INDEX idx_tags_relation ((CAST(tags_relation AS CHAR(255) ARRAY))),
+    INDEX idx_is_excellent (is_excellenct_author, star_excellent_author),
+    INDEX idx_ecommerce (e_commerce_enable, author_ecom_level)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='达人完整数据表-包含所有API字段';
 
 -- 为 tags 字段创建多值索引（MySQL 8.0.17+）
 ALTER TABLE daoren_author ADD INDEX idx_tags ((CAST(tags AS CHAR(255) ARRAY)));

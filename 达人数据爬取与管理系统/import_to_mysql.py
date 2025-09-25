@@ -164,20 +164,127 @@ class DataImporter:
         """处理单条CSV记录，转换为数据库格式"""
         processed = {}
         
-        # 基础字段映射
+        # 完整字段映射 - 支持新的数据库结构
         field_mapping = {
+            # 基础身份信息
             '达人ID (star_id)': 'star_id',
             '昵称 (nick_name)': 'nick_name',
-            '粉丝数 (follower)': 'follower',
+            '核心用户ID (core_user_id)': 'core_user_id',
+            '头像链接 (avatar_uri)': 'avatar_uri',
+            '性别 (gender)': 'gender',
             '所在地 (city)': 'city',
-            '近30天平均播放量 (vv_median_30d)': 'vv_median_30d',
+            '省份 (province)': 'province',
+            '达人类型 (author_type)': 'author_type',
+            '账号状态 (author_status)': 'author_status',
+            '达人等级 (grade)': 'grade',
+            
+            # 粉丝与影响力数据
+            '粉丝数 (follower)': 'follower',
+            '15天粉丝增长数 (fans_increment_within_15d)': 'fans_increment_within_15d',
+            '30天粉丝增长数 (fans_increment_within_30d)': 'fans_increment_within_30d',
+            '15天粉丝增长率 (fans_increment_rate_within_15d)': 'fans_increment_rate_within_15d',
             '近30天互动率 (interact_rate_within_30d)': 'interact_rate_within_30d',
-            '报价 (price)': 'price',
+            '30天互动中位数 (interaction_median_30d)': 'interaction_median_30d',
+            '30天播放完成率 (play_over_rate_within_30d)': 'play_over_rate_within_30d',
+            '近30天平均播放量 (vv_median_30d)': 'vv_median_30d',
+            
+            # 内容创作数据
+            '30天星图视频数量 (star_item_count_within_30d)': 'star_item_count_within_30d',
+            '90天星图视频总数 (star_video_cnt_90d)': 'star_video_cnt_90d',
+            '90天星图视频互动率 (star_video_interact_rate_90d)': 'star_video_interact_rate_90d',
+            '90天星图视频完播率 (star_video_finish_vv_rate_90d)': 'star_video_finish_vv_rate_90d',
+            '90天星图视频播放中位数 (star_video_median_vv_90d)': 'star_video_median_vv_90d',
+            
+            # 商业价值数据
+            '1-20秒视频报价 (price_1_20)': 'price_1_20',
+            '20-60秒视频报价 (price_20_60)': 'price_20_60',
+            '60秒以上视频报价 (price_60)': 'price_60',
+            '指派任务价格区间 (assign_task_price_list)': 'assign_task_price_list',
+            '预期播放量 (expected_play_num)': 'expected_play_num',
+            '预期自然播放量 (expected_natural_play_num)': 'expected_natural_play_num',
             '星图指数 (star_index)': 'star_index',
+            
+            # CPM成本数据
+            '1-20秒预期CPM (prospective_1_20_cpm)': 'prospective_1_20_cpm',
+            '20-60秒预期CPM (prospective_20_60_cpm)': 'prospective_20_60_cpm',
+            '60秒以上预期CPM (prospective_60_cpm)': 'prospective_60_cpm',
+            '推广1-20秒预期CPM (promotion_prospective_1_20_cpm)': 'promotion_prospective_1_20_cpm',
+            '推广20-60秒预期CPM (promotion_prospective_20_60_cpm)': 'promotion_prospective_20_60_cpm',
+            '推广60秒以上预期CPM (promotion_prospective_60_cpm)': 'promotion_prospective_60_cpm',
+            '推广预期播放量 (promotion_prospective_vv)': 'promotion_prospective_vv',
+            
+            # 电商数据
+            '电商功能开通 (e_commerce_enable)': 'e_commerce_enable',
             '电商等级 (author_ecom_level)': 'author_ecom_level',
+            '30天GMV范围 (ecom_gmv_30d_range)': 'ecom_gmv_30d_range',
+            '30天平均订单价值 (ecom_avg_order_value_30d_range)': 'ecom_avg_order_value_30d_range',
+            '30天毛利率范围 (ecom_gpm_30d_range)': 'ecom_gpm_30d_range',
+            '30天带货视频数 (ecom_video_product_num_30d)': 'ecom_video_product_num_30d',
+            '30天星图带货视频数 (star_ecom_video_num_30d)': 'star_ecom_video_num_30d',
+            
+            # 性能指标
+            '链接转化指数 (link_convert_index)': 'link_convert_index',
+            '行业链接转化指数 (link_convert_index_by_industry)': 'link_convert_index_by_industry',
+            '购物指数 (link_shopping_index)': 'link_shopping_index',
+            '传播指数 (link_spread_index)': 'link_spread_index',
+            '行业传播指数 (link_spread_index_by_industry)': 'link_spread_index_by_industry',
+            '链接星图指数 (link_star_index)': 'link_star_index',
+            '行业链接星图指数 (link_star_index_by_industry)': 'link_star_index_by_industry',
+            '行业推荐指数 (link_recommend_index_by_industry)': 'link_recommend_index_by_industry',
+            '搜索后观看指数 (search_after_view_index_by_industry)': 'search_after_view_index_by_industry',
+            
+            # 认证与等级
+            '优质达人 (is_excellenct_author)': 'is_excellenct_author',
+            '星图优质达人 (star_excellent_author)': 'star_excellent_author',
+            '头像框等级 (author_avatar_frame_icon)': 'author_avatar_frame_icon',
+            '黑马达人 (is_black_horse_author)': 'is_black_horse_author',
+            '共创达人 (is_cocreate_author)': 'is_cocreate_author',
+            'CPM项目达人 (is_cpm_project_author)': 'is_cpm_project_author',
+            '短剧达人 (is_short_drama)': 'is_short_drama',
+            '星图私信达人 (star_whispers_author)': 'star_whispers_author',
+            '本地低门槛达人 (local_lower_threshold_author)': 'local_lower_threshold_author',
+            
+            # 其他数据
+            '爆文率 (burst_text_rate)': 'burst_text_rate',
+            '品牌提升播放量 (brand_boost_vv)': 'brand_boost_vv',
+            '视频品牌提升 (video_brand_boost)': 'video_brand_boost',
+            '视频品牌提升播放量 (video_brand_boost_vv)': 'video_brand_boost_vv',
+            '预期CPA3等级 (expected_cpa3_level)': 'expected_cpa3_level',
+            '游戏类型 (game_type)': 'game_type',
+            
+            # 组件数据
+            '90天组件安装完成数 (star_component_install_finish_cnt_90d)': 'star_component_install_finish_cnt_90d',
+            '90天组件链接点击数 (star_component_link_click_cnt_90d)': 'star_component_link_click_cnt_90d',
+            '90天视频安装>=1次数 (star_video_install_ge_1_cnt_90d)': 'star_video_install_ge_1_cnt_90d',
+            
+            # 系统字段
             '页码': 'page_num',
-            '爬取日期': 'crawled_at'
+            '爬取日期': 'crawled_at',
+            '来源URL (source_url)': 'source_url'
         }
+        
+        # 数值字段定义
+        integer_fields = [
+            'follower', 'fans_increment_within_15d', 'fans_increment_within_30d', 'interaction_median_30d',
+            'vv_median_30d', 'star_item_count_within_30d', 'star_video_cnt_90d', 'star_video_median_vv_90d',
+            'expected_play_num', 'expected_natural_play_num', 'promotion_prospective_vv',
+            'ecom_video_product_num_30d', 'star_ecom_video_num_30d', 'star_component_install_finish_cnt_90d',
+            'star_component_link_click_cnt_90d', 'star_video_install_ge_1_cnt_90d', 'brand_boost_vv',
+            'video_brand_boost_vv', 'page_num', 'gender', 'author_type', 'author_status', 'grade',
+            'e_commerce_enable', 'is_excellenct_author', 'star_excellent_author', 'is_black_horse_author',
+            'is_cocreate_author', 'is_cpm_project_author', 'is_short_drama', 'star_whispers_author',
+            'local_lower_threshold_author', 'video_brand_boost', 'expected_cpa3_level'
+        ]
+        
+        decimal_fields = [
+            'fans_increment_rate_within_15d', 'interact_rate_within_30d', 'play_over_rate_within_30d',
+            'star_video_interact_rate_90d', 'star_video_finish_vv_rate_90d', 'price_1_20', 'price_20_60',
+            'price_60', 'star_index', 'prospective_1_20_cpm', 'prospective_20_60_cpm', 'prospective_60_cpm',
+            'promotion_prospective_1_20_cpm', 'promotion_prospective_20_60_cpm', 'promotion_prospective_60_cpm',
+            'link_convert_index', 'link_convert_index_by_industry', 'link_shopping_index', 'link_spread_index',
+            'link_spread_index_by_industry', 'link_star_index', 'link_star_index_by_industry',
+            'link_recommend_index_by_industry', 'search_after_view_index_by_industry', 'burst_text_rate'
+        ]
         
         for csv_field, db_field in field_mapping.items():
             value = record.get(csv_field)
@@ -192,13 +299,14 @@ class DataImporter:
             
             # 根据字段类型设置值或默认值
             if value is not None and value != '':
-                # 数值字段类型转换
-                if db_field in ['follower', 'vv_median_30d', 'price', 'star_index', 'page_num']:
+                # 整数字段类型转换
+                if db_field in integer_fields:
                     try:
                         processed[db_field] = int(float(str(value))) if value else 0
                     except (ValueError, TypeError):
                         processed[db_field] = 0
-                elif db_field == 'interact_rate_within_30d':
+                # 小数字段类型转换
+                elif db_field in decimal_fields:
                     try:
                         processed[db_field] = float(str(value)) if value else 0.0
                     except (ValueError, TypeError):
@@ -207,9 +315,9 @@ class DataImporter:
                     processed[db_field] = str(value) if value else None
             else:
                 # 设置默认值
-                if db_field in ['follower', 'vv_median_30d', 'price', 'star_index', 'page_num']:
+                if db_field in integer_fields:
                     processed[db_field] = 0
-                elif db_field == 'interact_rate_within_30d':
+                elif db_field in decimal_fields:
                     processed[db_field] = 0.0
                 else:
                     processed[db_field] = None
@@ -217,9 +325,16 @@ class DataImporter:
         # 处理JSON字段
         content_labels = self.parse_json_field(record.get('内容主题标签 (content_theme_labels_180d)', ''))
         tags = self.parse_json_field(record.get('达人类型 (tags)', ''))
+        tags_relation = self.parse_json_field(record.get('达人标签关系 (tags_relation)', ''))
+        last_10_items = self.parse_json_field(record.get('最近10个视频 (last_10_items)', ''))
+        items = self.parse_json_field(record.get('热门视频列表 (items)', ''))
+        task_infos = self.parse_json_field(record.get('任务信息 (task_infos)', ''))
         
-        processed['content_theme_labels'] = json.dumps(content_labels, ensure_ascii=False)
-        processed['tags'] = json.dumps(tags, ensure_ascii=False)
+        processed['content_theme_labels_180d'] = json.dumps(content_labels, ensure_ascii=False)
+        processed['tags_relation'] = json.dumps(tags_relation, ensure_ascii=False)
+        processed['last_10_items'] = json.dumps(last_10_items, ensure_ascii=False)
+        processed['items'] = json.dumps(items, ensure_ascii=False)
+        processed['task_infos'] = json.dumps(task_infos, ensure_ascii=False)
         
         # 处理日期字段
         crawled_date = record.get('爬取日期')
@@ -243,29 +358,134 @@ class DataImporter:
         """插入单条记录到数据库"""
         try:
             with conn.cursor() as cursor:
-                # 使用 INSERT ... ON DUPLICATE KEY UPDATE 语句
+                # 使用 INSERT ... ON DUPLICATE KEY UPDATE 语句 - 支持完整字段
                 sql = """
                     INSERT INTO daoren_author 
-                    (star_id, nick_name, follower, city, vv_median_30d, interact_rate_within_30d,
-                     price, star_index, author_ecom_level, content_theme_labels, tags, 
-                     crawled_at, page_num)
+                    (star_id, nick_name, core_user_id, avatar_uri, gender, city, province, author_type, 
+                     author_status, grade, follower, fans_increment_within_15d, fans_increment_within_30d,
+                     fans_increment_rate_within_15d, interact_rate_within_30d, interaction_median_30d,
+                     play_over_rate_within_30d, vv_median_30d, star_item_count_within_30d, star_video_cnt_90d,
+                     star_video_interact_rate_90d, star_video_finish_vv_rate_90d, star_video_median_vv_90d,
+                     price_1_20, price_20_60, price_60, assign_task_price_list, expected_play_num,
+                     expected_natural_play_num, star_index, prospective_1_20_cpm, prospective_20_60_cpm,
+                     prospective_60_cpm, promotion_prospective_1_20_cpm, promotion_prospective_20_60_cpm,
+                     promotion_prospective_60_cpm, promotion_prospective_vv, e_commerce_enable, author_ecom_level,
+                     ecom_gmv_30d_range, ecom_avg_order_value_30d_range, ecom_gpm_30d_range,
+                     ecom_video_product_num_30d, star_ecom_video_num_30d, link_convert_index,
+                     link_convert_index_by_industry, link_shopping_index, link_spread_index,
+                     link_spread_index_by_industry, link_star_index, link_star_index_by_industry,
+                     link_recommend_index_by_industry, search_after_view_index_by_industry,
+                     is_excellenct_author, star_excellent_author, author_avatar_frame_icon,
+                     is_black_horse_author, is_cocreate_author, is_cpm_project_author, is_short_drama,
+                     star_whispers_author, local_lower_threshold_author, burst_text_rate, brand_boost_vv,
+                     video_brand_boost, video_brand_boost_vv, expected_cpa3_level, game_type,
+                     star_component_install_finish_cnt_90d, star_component_link_click_cnt_90d,
+                     star_video_install_ge_1_cnt_90d, content_theme_labels_180d, tags_relation,
+                     last_10_items, items, task_infos, crawled_at, page_num, source_url)
                     VALUES 
-                    (%(star_id)s, %(nick_name)s, %(follower)s, %(city)s, %(vv_median_30d)s, 
-                     %(interact_rate_within_30d)s, %(price)s, %(star_index)s, %(author_ecom_level)s,
-                     %(content_theme_labels)s, %(tags)s, %(crawled_at)s, %(page_num)s)
+                    (%(star_id)s, %(nick_name)s, %(core_user_id)s, %(avatar_uri)s, %(gender)s, %(city)s,
+                     %(province)s, %(author_type)s, %(author_status)s, %(grade)s, %(follower)s,
+                     %(fans_increment_within_15d)s, %(fans_increment_within_30d)s, %(fans_increment_rate_within_15d)s,
+                     %(interact_rate_within_30d)s, %(interaction_median_30d)s, %(play_over_rate_within_30d)s,
+                     %(vv_median_30d)s, %(star_item_count_within_30d)s, %(star_video_cnt_90d)s,
+                     %(star_video_interact_rate_90d)s, %(star_video_finish_vv_rate_90d)s, %(star_video_median_vv_90d)s,
+                     %(price_1_20)s, %(price_20_60)s, %(price_60)s, %(assign_task_price_list)s,
+                     %(expected_play_num)s, %(expected_natural_play_num)s, %(star_index)s,
+                     %(prospective_1_20_cpm)s, %(prospective_20_60_cpm)s, %(prospective_60_cpm)s,
+                     %(promotion_prospective_1_20_cpm)s, %(promotion_prospective_20_60_cpm)s,
+                     %(promotion_prospective_60_cpm)s, %(promotion_prospective_vv)s, %(e_commerce_enable)s,
+                     %(author_ecom_level)s, %(ecom_gmv_30d_range)s, %(ecom_avg_order_value_30d_range)s,
+                     %(ecom_gpm_30d_range)s, %(ecom_video_product_num_30d)s, %(star_ecom_video_num_30d)s,
+                     %(link_convert_index)s, %(link_convert_index_by_industry)s, %(link_shopping_index)s,
+                     %(link_spread_index)s, %(link_spread_index_by_industry)s, %(link_star_index)s,
+                     %(link_star_index_by_industry)s, %(link_recommend_index_by_industry)s,
+                     %(search_after_view_index_by_industry)s, %(is_excellenct_author)s, %(star_excellent_author)s,
+                     %(author_avatar_frame_icon)s, %(is_black_horse_author)s, %(is_cocreate_author)s,
+                     %(is_cpm_project_author)s, %(is_short_drama)s, %(star_whispers_author)s,
+                     %(local_lower_threshold_author)s, %(burst_text_rate)s, %(brand_boost_vv)s,
+                     %(video_brand_boost)s, %(video_brand_boost_vv)s, %(expected_cpa3_level)s, %(game_type)s,
+                     %(star_component_install_finish_cnt_90d)s, %(star_component_link_click_cnt_90d)s,
+                     %(star_video_install_ge_1_cnt_90d)s, %(content_theme_labels_180d)s, %(tags_relation)s,
+                     %(last_10_items)s, %(items)s, %(task_infos)s, %(crawled_at)s, %(page_num)s, %(source_url)s)
                     ON DUPLICATE KEY UPDATE
                         nick_name = VALUES(nick_name),
-                        follower = VALUES(follower),
+                        core_user_id = VALUES(core_user_id),
+                        avatar_uri = VALUES(avatar_uri),
+                        gender = VALUES(gender),
                         city = VALUES(city),
-                        vv_median_30d = VALUES(vv_median_30d),
+                        province = VALUES(province),
+                        author_type = VALUES(author_type),
+                        author_status = VALUES(author_status),
+                        grade = VALUES(grade),
+                        follower = VALUES(follower),
+                        fans_increment_within_15d = VALUES(fans_increment_within_15d),
+                        fans_increment_within_30d = VALUES(fans_increment_within_30d),
+                        fans_increment_rate_within_15d = VALUES(fans_increment_rate_within_15d),
                         interact_rate_within_30d = VALUES(interact_rate_within_30d),
-                        price = VALUES(price),
+                        interaction_median_30d = VALUES(interaction_median_30d),
+                        play_over_rate_within_30d = VALUES(play_over_rate_within_30d),
+                        vv_median_30d = VALUES(vv_median_30d),
+                        star_item_count_within_30d = VALUES(star_item_count_within_30d),
+                        star_video_cnt_90d = VALUES(star_video_cnt_90d),
+                        star_video_interact_rate_90d = VALUES(star_video_interact_rate_90d),
+                        star_video_finish_vv_rate_90d = VALUES(star_video_finish_vv_rate_90d),
+                        star_video_median_vv_90d = VALUES(star_video_median_vv_90d),
+                        price_1_20 = VALUES(price_1_20),
+                        price_20_60 = VALUES(price_20_60),
+                        price_60 = VALUES(price_60),
+                        assign_task_price_list = VALUES(assign_task_price_list),
+                        expected_play_num = VALUES(expected_play_num),
+                        expected_natural_play_num = VALUES(expected_natural_play_num),
                         star_index = VALUES(star_index),
+                        prospective_1_20_cpm = VALUES(prospective_1_20_cpm),
+                        prospective_20_60_cpm = VALUES(prospective_20_60_cpm),
+                        prospective_60_cpm = VALUES(prospective_60_cpm),
+                        promotion_prospective_1_20_cpm = VALUES(promotion_prospective_1_20_cpm),
+                        promotion_prospective_20_60_cpm = VALUES(promotion_prospective_20_60_cpm),
+                        promotion_prospective_60_cpm = VALUES(promotion_prospective_60_cpm),
+                        promotion_prospective_vv = VALUES(promotion_prospective_vv),
+                        e_commerce_enable = VALUES(e_commerce_enable),
                         author_ecom_level = VALUES(author_ecom_level),
-                        content_theme_labels = VALUES(content_theme_labels),
-                        tags = VALUES(tags),
+                        ecom_gmv_30d_range = VALUES(ecom_gmv_30d_range),
+                        ecom_avg_order_value_30d_range = VALUES(ecom_avg_order_value_30d_range),
+                        ecom_gpm_30d_range = VALUES(ecom_gpm_30d_range),
+                        ecom_video_product_num_30d = VALUES(ecom_video_product_num_30d),
+                        star_ecom_video_num_30d = VALUES(star_ecom_video_num_30d),
+                        link_convert_index = VALUES(link_convert_index),
+                        link_convert_index_by_industry = VALUES(link_convert_index_by_industry),
+                        link_shopping_index = VALUES(link_shopping_index),
+                        link_spread_index = VALUES(link_spread_index),
+                        link_spread_index_by_industry = VALUES(link_spread_index_by_industry),
+                        link_star_index = VALUES(link_star_index),
+                        link_star_index_by_industry = VALUES(link_star_index_by_industry),
+                        link_recommend_index_by_industry = VALUES(link_recommend_index_by_industry),
+                        search_after_view_index_by_industry = VALUES(search_after_view_index_by_industry),
+                        is_excellenct_author = VALUES(is_excellenct_author),
+                        star_excellent_author = VALUES(star_excellent_author),
+                        author_avatar_frame_icon = VALUES(author_avatar_frame_icon),
+                        is_black_horse_author = VALUES(is_black_horse_author),
+                        is_cocreate_author = VALUES(is_cocreate_author),
+                        is_cpm_project_author = VALUES(is_cpm_project_author),
+                        is_short_drama = VALUES(is_short_drama),
+                        star_whispers_author = VALUES(star_whispers_author),
+                        local_lower_threshold_author = VALUES(local_lower_threshold_author),
+                        burst_text_rate = VALUES(burst_text_rate),
+                        brand_boost_vv = VALUES(brand_boost_vv),
+                        video_brand_boost = VALUES(video_brand_boost),
+                        video_brand_boost_vv = VALUES(video_brand_boost_vv),
+                        expected_cpa3_level = VALUES(expected_cpa3_level),
+                        game_type = VALUES(game_type),
+                        star_component_install_finish_cnt_90d = VALUES(star_component_install_finish_cnt_90d),
+                        star_component_link_click_cnt_90d = VALUES(star_component_link_click_cnt_90d),
+                        star_video_install_ge_1_cnt_90d = VALUES(star_video_install_ge_1_cnt_90d),
+                        content_theme_labels_180d = VALUES(content_theme_labels_180d),
+                        tags_relation = VALUES(tags_relation),
+                        last_10_items = VALUES(last_10_items),
+                        items = VALUES(items),
+                        task_infos = VALUES(task_infos),
                         crawled_at = VALUES(crawled_at),
                         page_num = VALUES(page_num),
+                        source_url = VALUES(source_url),
                         updated_at = CURRENT_TIMESTAMP
                 """
                 

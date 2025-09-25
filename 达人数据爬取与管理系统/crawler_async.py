@@ -403,8 +403,19 @@ class AsyncDarenCrawler:
                 conn.close()
                 
     def parse_author_data(self, author: Dict[str, Any], page_num: int) -> Dict[str, Any]:
-        """解析单个达人的数据"""
+        """解析单个达人的数据 - 完整版本，包含所有有价值字段"""
+        
+        # 添加调试输出
+        print(f"\n=== 调试信息 - 第{page_num}页达人数据 ===")
+        print(f"原始author数据结构: {json.dumps(author, ensure_ascii=False, indent=2)[:1000]}...")
+        
         attr_data = author.get('attribute_datas', {})
+        print(f"attribute_datas存在: {bool(attr_data)}")
+        if attr_data:
+            print(f"nick_name字段: {attr_data.get('nick_name', '不存在')}")
+            print(f"follower字段: {attr_data.get('follower', '不存在')}")
+            print(f"tags_relation字段: {attr_data.get('tags_relation', '不存在')}")
+        print("=" * 50)
         
         # 安全获取task_info，避免list index out of range错误
         task_infos = author.get('task_infos', [])
@@ -412,7 +423,6 @@ class AsyncDarenCrawler:
         
         # 安全获取price_info，避免list index out of range错误
         price_infos = task_info.get('price_infos', [])
-        price_info = price_infos[0] if price_infos else {}
         
         # 安全获取数值，避免None和NaN
         def safe_get_number(data, key, default=0):
@@ -433,25 +443,27 @@ class AsyncDarenCrawler:
             if not str_value or str_value == '0':
                 return default if default else '未知'
             return str_value
-        
-        # 提取核心字段
-        parsed_data = {
-            "达人ID (star_id)": safe_get_string(author, 'star_id'),
-            "昵称 (nick_name)": safe_get_string(attr_data, 'nick_name'),
-            "粉丝数 (follower)": safe_get_number(attr_data, 'follower', 0),
-            "所在地 (city)": safe_get_string(attr_data, 'city'),
-            "近30天平均播放量 (vv_median_30d)": safe_get_number(attr_data, 'vv_median_30d', 0),
-            "近30天互动率 (interact_rate_within_30d)": safe_get_number(attr_data, 'interact_rate_within_30d', 0.0),
-            "报价 (price)": safe_get_number(price_info, 'price', 0),
-            "星图指数 (star_index)": safe_get_number(attr_data, 'star_index', 0),
-            "电商等级 (author_ecom_level)": safe_get_string(attr_data, 'author_ecom_level'),
-            "内容主题标签 (content_theme_labels_180d)": safe_get_string(attr_data, 'content_theme_labels_180d'),
-            "页码": page_num,
-            "爬取日期": date.today().strftime('%Y-%m-%d')
-        }
+            
+        def safe_get_json_string(data, key, default=''):
+            """安全获取JSON字符串并格式化"""
+            value = data.get(key, default)
+            if value is None or str(value).lower() == 'nan':
+                return default
+            try:
+                if isinstance(value, str):
+                    # 尝试解析JSON并重新格式化
+                    parsed = json.loads(value)
+                    return json.dumps(parsed, ensure_ascii=False, separators=(',', ':'))
+                elif isinstance(value, (list, dict)):
+                    return json.dumps(value, ensure_ascii=False, separators=(',', ':'))
+                else:
+                    return str(value)
+            except:
+                return str(value) if value else default
         
         # 提取达人类型
         tags_relation_str = attr_data.get('tags_relation', '{}')
+        达人类型列表 = []
         try:
             # 安全处理tags_relation字段
             if tags_relation_str is None or str(tags_relation_str).lower() == 'nan':
@@ -463,8 +475,142 @@ class AsyncDarenCrawler:
             达人类型列表 = [tag for tag in tags_relation_dict.keys() if tag and str(tag).strip()]
         except (json.JSONDecodeError, TypeError, AttributeError):
             达人类型列表 = []
+        
+        # 获取所有价格信息
+        price_1_20 = safe_get_number(attr_data, 'price_1_20', 0)
+        price_20_60 = safe_get_number(attr_data, 'price_20_60', 0)
+        price_60 = safe_get_number(attr_data, 'price_60', 0)
+        
+        # 从price_infos中获取更多价格信息
+        all_prices = []
+        video_types = []
+        for price_info in price_infos:
+            price = safe_get_number(price_info, 'price', 0)
+            video_type = safe_get_number(price_info, 'video_type', 0)
+            if price > 0:
+                all_prices.append(price)
+                video_types.append(video_type)
+        
+        # 计算价格统计
+        min_price = min(all_prices) if all_prices else 0
+        max_price = max(all_prices) if all_prices else 0
+        avg_price = sum(all_prices) / len(all_prices) if all_prices else 0
+        
+        # 构建完整的数据字典
+        parsed_data = {
+            # === 基础身份信息 ===
+            "达人ID (star_id)": safe_get_string(author, 'star_id'),
+            "昵称 (nick_name)": safe_get_string(attr_data, 'nick_name'),
+            "核心用户ID (core_user_id)": safe_get_string(attr_data, 'core_user_id'),
+            "头像链接 (avatar_uri)": safe_get_string(attr_data, 'avatar_uri'),
+            "性别 (gender)": safe_get_number(attr_data, 'gender'),
+            "所在地 (city)": safe_get_string(attr_data, 'city'),
+            "省份 (province)": safe_get_string(attr_data, 'province'),
+            "达人类型 (author_type)": safe_get_number(attr_data, 'author_type'),
+            "账号状态 (author_status)": safe_get_number(attr_data, 'author_status'),
+            "达人等级 (grade)": safe_get_number(attr_data, 'grade'),
             
-        parsed_data["达人类型 (tags)"] = 达人类型列表
+            # === 粉丝与影响力数据 ===
+            "粉丝数 (follower)": safe_get_number(attr_data, 'follower'),
+            "15天粉丝增长数 (fans_increment_within_15d)": safe_get_number(attr_data, 'fans_increment_within_15d'),
+            "30天粉丝增长数 (fans_increment_within_30d)": safe_get_number(attr_data, 'fans_increment_within_30d'),
+            "15天粉丝增长率 (fans_increment_rate_within_15d)": safe_get_number(attr_data, 'fans_increment_rate_within_15d'),
+            "近30天互动率 (interact_rate_within_30d)": safe_get_number(attr_data, 'interact_rate_within_30d'),
+            "30天互动中位数 (interaction_median_30d)": safe_get_number(attr_data, 'interaction_median_30d'),
+            "30天播放完成率 (play_over_rate_within_30d)": safe_get_number(attr_data, 'play_over_rate_within_30d'),
+            "近30天平均播放量 (vv_median_30d)": safe_get_number(attr_data, 'vv_median_30d'),
+            
+            # === 内容创作数据 ===
+            "30天星图视频数量 (star_item_count_within_30d)": safe_get_number(attr_data, 'star_item_count_within_30d'),
+            "90天星图视频总数 (star_video_cnt_90d)": safe_get_number(attr_data, 'star_video_cnt_90d'),
+            "90天星图视频互动率 (star_video_interact_rate_90d)": safe_get_number(attr_data, 'star_video_interact_rate_90d'),
+            "90天星图视频完播率 (star_video_finish_vv_rate_90d)": safe_get_number(attr_data, 'star_video_finish_vv_rate_90d'),
+            "90天星图视频播放中位数 (star_video_median_vv_90d)": safe_get_number(attr_data, 'star_video_median_vv_90d'),
+            "内容主题标签 (content_theme_labels_180d)": safe_get_json_string(attr_data, 'content_theme_labels_180d'),
+            "达人标签关系 (tags_relation)": safe_get_json_string(attr_data, 'tags_relation'),
+            "达人类型 (tags)": 达人类型列表,
+            
+            # === 商业价值数据 ===
+            "1-20秒视频报价 (price_1_20)": price_1_20,
+            "20-60秒视频报价 (price_20_60)": price_20_60,
+            "60秒以上视频报价 (price_60)": price_60,
+            "指派任务价格区间 (assign_task_price_list)": safe_get_string(attr_data, 'assign_task_price_list'),
+            "预期播放量 (expected_play_num)": safe_get_number(attr_data, 'expected_play_num'),
+            "预期自然播放量 (expected_natural_play_num)": safe_get_number(attr_data, 'expected_natural_play_num'),
+            "星图指数 (star_index)": safe_get_number(attr_data, 'star_index'),
+            
+            # === CPM成本数据 ===
+            "1-20秒预期CPM (prospective_1_20_cpm)": safe_get_number(attr_data, 'prospective_1_20_cpm'),
+            "20-60秒预期CPM (prospective_20_60_cpm)": safe_get_number(attr_data, 'prospective_20_60_cpm'),
+            "60秒以上预期CPM (prospective_60_cpm)": safe_get_number(attr_data, 'prospective_60_cpm'),
+            "推广1-20秒预期CPM (promotion_prospective_1_20_cpm)": safe_get_number(attr_data, 'promotion_prospective_1_20_cpm'),
+            "推广20-60秒预期CPM (promotion_prospective_20_60_cpm)": safe_get_number(attr_data, 'promotion_prospective_20_60_cpm'),
+            "推广60秒以上预期CPM (promotion_prospective_60_cpm)": safe_get_number(attr_data, 'promotion_prospective_60_cpm'),
+            "推广预期播放量 (promotion_prospective_vv)": safe_get_number(attr_data, 'promotion_prospective_vv'),
+            
+            # === 电商数据 ===
+            "电商功能开通 (e_commerce_enable)": safe_get_number(attr_data, 'e_commerce_enable'),
+            "电商等级 (author_ecom_level)": safe_get_string(attr_data, 'author_ecom_level'),
+            "30天GMV范围 (ecom_gmv_30d_range)": safe_get_string(attr_data, 'ecom_gmv_30d_range'),
+            "30天平均订单价值 (ecom_avg_order_value_30d_range)": safe_get_string(attr_data, 'ecom_avg_order_value_30d_range'),
+            "30天毛利率范围 (ecom_gpm_30d_range)": safe_get_string(attr_data, 'ecom_gpm_30d_range'),
+            "30天带货视频数 (ecom_video_product_num_30d)": safe_get_number(attr_data, 'ecom_video_product_num_30d'),
+            "30天星图带货视频数 (star_ecom_video_num_30d)": safe_get_number(attr_data, 'star_ecom_video_num_30d'),
+            
+            # === 性能指标 ===
+            "链接转化指数 (link_convert_index)": safe_get_number(attr_data, 'link_convert_index'),
+            "行业链接转化指数 (link_convert_index_by_industry)": safe_get_number(attr_data, 'link_convert_index_by_industry'),
+            "购物指数 (link_shopping_index)": safe_get_number(attr_data, 'link_shopping_index'),
+            "传播指数 (link_spread_index)": safe_get_number(attr_data, 'link_spread_index'),
+            "行业传播指数 (link_spread_index_by_industry)": safe_get_number(attr_data, 'link_spread_index_by_industry'),
+            "链接星图指数 (link_star_index)": safe_get_number(attr_data, 'link_star_index'),
+            "行业链接星图指数 (link_star_index_by_industry)": safe_get_number(attr_data, 'link_star_index_by_industry'),
+            "行业推荐指数 (link_recommend_index_by_industry)": safe_get_number(attr_data, 'link_recommend_index_by_industry'),
+            "搜索后观看指数 (search_after_view_index_by_industry)": safe_get_number(attr_data, 'search_after_view_index_by_industry'),
+            
+            # === 认证与等级 ===
+            "优质达人 (is_excellenct_author)": safe_get_number(attr_data, 'is_excellenct_author'),
+            "星图优质达人 (star_excellent_author)": safe_get_number(attr_data, 'star_excellent_author'),
+            "头像框等级 (author_avatar_frame_icon)": safe_get_string(attr_data, 'author_avatar_frame_icon'),
+            "黑马达人 (is_black_horse_author)": safe_get_number(attr_data, 'is_black_horse_author'),
+            "共创达人 (is_cocreate_author)": safe_get_number(attr_data, 'is_cocreate_author'),
+            "CPM项目达人 (is_cpm_project_author)": safe_get_number(attr_data, 'is_cpm_project_author'),
+            "短剧达人 (is_short_drama)": safe_get_number(attr_data, 'is_short_drama'),
+            "星图私信达人 (star_whispers_author)": safe_get_number(attr_data, 'star_whispers_author'),
+            "本地低门槛达人 (local_lower_threshold_author)": safe_get_number(attr_data, 'local_lower_threshold_author'),
+            
+            # === 其他数据 ===
+            "爆文率 (burst_text_rate)": safe_get_number(attr_data, 'burst_text_rate'),
+            "品牌提升播放量 (brand_boost_vv)": safe_get_number(attr_data, 'brand_boost_vv'),
+            "视频品牌提升 (video_brand_boost)": safe_get_number(attr_data, 'video_brand_boost'),
+            "视频品牌提升播放量 (video_brand_boost_vv)": safe_get_number(attr_data, 'video_brand_boost_vv'),
+            "预期CPA3等级 (expected_cpa3_level)": safe_get_number(attr_data, 'expected_cpa3_level'),
+            "游戏类型 (game_type)": safe_get_string(attr_data, 'game_type'),
+            
+            # === 组件数据 ===
+            "90天组件安装完成数 (star_component_install_finish_cnt_90d)": safe_get_number(attr_data, 'star_component_install_finish_cnt_90d'),
+            "90天组件链接点击数 (star_component_link_click_cnt_90d)": safe_get_number(attr_data, 'star_component_link_click_cnt_90d'),
+            "90天视频安装>=1次数 (star_video_install_ge_1_cnt_90d)": safe_get_number(attr_data, 'star_video_install_ge_1_cnt_90d'),
+            
+            # === 热门视频数据 ===
+            "热门视频数量": len(author.get('items', [])),
+            "热门视频总播放量": sum([safe_get_number(item, 'vv', 0) for item in author.get('items', [])]),
+            "热门视频平均播放量": round(sum([safe_get_number(item, 'vv', 0) for item in author.get('items', [])]) / len(author.get('items', [])), 0) if author.get('items') else 0,
+            
+            # === 达人类型标签 ===
+            "达人类型 (tags)": 达人类型列表,
+            
+            # === 系统字段 ===
+            "页码": page_num,
+            "爬取日期": date.today().strftime('%Y-%m-%d'),
+            "爬取时间": datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+            "来源URL (source_url)": "",
+            
+            # === 原始数据（用于调试和完整性） ===
+            "最近10个视频数据 (last_10_items)": safe_get_json_string(attr_data, 'last_10_items'),
+            "热门视频列表 (items)": json.dumps(author.get('items', []), ensure_ascii=False, separators=(',', ':')),
+            "任务信息 (task_infos)": json.dumps(task_infos, ensure_ascii=False, separators=(',', ':'))
+        }
         
         return parsed_data
         
@@ -502,24 +648,180 @@ class AsyncDarenCrawler:
             filename = f"{tag}-{safe_nick_name}-第{page_num}页-{crawl_date}.csv"
             filepath = os.path.join(folder_path, filename)
             
-            # 清理数据中的NaN值
+            # 定义完整的字段顺序，确保CSV输出的可读性和一致性
+            field_order = [
+                # === 基础身份信息 ===
+                "达人ID (star_id)",
+                "昵称 (nick_name)",
+                "核心用户ID (core_user_id)",
+                "头像链接 (avatar_uri)",
+                "性别 (gender)",
+                "所在地 (city)",
+                "省份 (province)",
+                "达人类型 (author_type)",
+                "账号状态 (author_status)",
+                "达人等级 (grade)",
+                
+                # === 粉丝与影响力数据 ===
+                "粉丝数 (follower)",
+                "15天粉丝增长数 (fans_increment_within_15d)",
+                "30天粉丝增长数 (fans_increment_within_30d)",
+                "15天粉丝增长率 (fans_increment_rate_within_15d)",
+                "近30天互动率 (interact_rate_within_30d)",
+                "30天互动中位数 (interaction_median_30d)",
+                "30天播放完成率 (play_over_rate_within_30d)",
+                "近30天平均播放量 (vv_median_30d)",
+                
+                # === 内容创作数据 ===
+                "30天星图视频数量 (star_item_count_within_30d)",
+                "90天星图视频总数 (star_video_cnt_90d)",
+                "90天星图视频互动率 (star_video_interact_rate_90d)",
+                "90天星图视频完播率 (star_video_finish_vv_rate_90d)",
+                "90天星图视频播放中位数 (star_video_median_vv_90d)",
+                "内容主题标签 (content_theme_labels_180d)",
+                "达人标签关系 (tags_relation)",
+                
+                # === 商业价值数据 ===
+                "1-20秒视频报价 (price_1_20)",
+                "20-60秒视频报价 (price_20_60)",
+                "60秒以上视频报价 (price_60)",
+                "指派任务价格区间 (assign_task_price_list)",
+                "预期播放量 (expected_play_num)",
+                "预期自然播放量 (expected_natural_play_num)",
+                "星图指数 (star_index)",
+                
+                # === CPM成本数据 ===
+                "1-20秒预期CPM (prospective_1_20_cpm)",
+                "20-60秒预期CPM (prospective_20_60_cpm)",
+                "60秒以上预期CPM (prospective_60_cpm)",
+                "推广1-20秒预期CPM (promotion_prospective_1_20_cpm)",
+                "推广20-60秒预期CPM (promotion_prospective_20_60_cpm)",
+                "推广60秒以上预期CPM (promotion_prospective_60_cpm)",
+                "推广预期播放量 (promotion_prospective_vv)",
+                
+                # === 电商数据 ===
+                "电商功能开通 (e_commerce_enable)",
+                "电商等级 (author_ecom_level)",
+                "30天GMV范围 (ecom_gmv_30d_range)",
+                "30天平均订单价值 (ecom_avg_order_value_30d_range)",
+                "30天毛利率范围 (ecom_gpm_30d_range)",
+                "30天带货视频数 (ecom_video_product_num_30d)",
+                "30天星图带货视频数 (star_ecom_video_num_30d)",
+                
+                # === 性能指标 ===
+                "链接转化指数 (link_convert_index)",
+                "行业链接转化指数 (link_convert_index_by_industry)",
+                "购物指数 (link_shopping_index)",
+                "传播指数 (link_spread_index)",
+                "行业传播指数 (link_spread_index_by_industry)",
+                "链接星图指数 (link_star_index)",
+                "行业链接星图指数 (link_star_index_by_industry)",
+                "行业推荐指数 (link_recommend_index_by_industry)",
+                "搜索后观看指数 (search_after_view_index_by_industry)",
+                
+                # === 认证与等级 ===
+                "优质达人 (is_excellenct_author)",
+                "星图优质达人 (star_excellent_author)",
+                "头像框等级 (author_avatar_frame_icon)",
+                "黑马达人 (is_black_horse_author)",
+                "共创达人 (is_cocreate_author)",
+                "CPM项目达人 (is_cpm_project_author)",
+                "短剧达人 (is_short_drama)",
+                "星图私信达人 (star_whispers_author)",
+                "本地低门槛达人 (local_lower_threshold_author)",
+                
+                # === 其他数据 ===
+                "爆文率 (burst_text_rate)",
+                "品牌提升播放量 (brand_boost_vv)",
+                "视频品牌提升 (video_brand_boost)",
+                "视频品牌提升播放量 (video_brand_boost_vv)",
+                "预期CPA3等级 (expected_cpa3_level)",
+                "游戏类型 (game_type)",
+                
+                # === 组件数据 ===
+                "90天组件安装完成数 (star_component_install_finish_cnt_90d)",
+                "90天组件链接点击数 (star_component_link_click_cnt_90d)",
+                "90天视频安装>=1次数 (star_video_install_ge_1_cnt_90d)",
+                
+                # === 热门视频数据 ===
+                "热门视频数量",
+                "热门视频总播放量",
+                "热门视频平均播放量",
+                
+                # === 达人类型标签 ===
+                "达人类型 (tags)",
+                
+                # === 系统字段 ===
+                "页码",
+                "爬取日期",
+                "爬取时间",
+                "来源URL (source_url)",
+                
+                # === 原始数据（用于调试和完整性） ===
+                "最近10个视频数据 (last_10_items)",
+                "热门视频列表 (items)",
+                "任务信息 (task_infos)"
+            ]
+            
+            # 清理数据中的NaN值并按字段顺序组织数据
             clean_data = {}
-            for key, value in author_data.items():
+            
+            # 数值字段定义（用于NaN值处理）
+            numeric_fields = {
+                '粉丝数 (follower)', '15天粉丝增长数 (fans_increment_within_15d)', 
+                '30天粉丝增长数 (fans_increment_within_30d)', '30天互动中位数 (interaction_median_30d)',
+                '近30天平均播放量 (vv_median_30d)', '30天星图视频数量 (star_item_count_within_30d)',
+                '90天星图视频总数 (star_video_cnt_90d)', '90天星图视频播放中位数 (star_video_median_vv_90d)',
+                '1-20秒视频报价 (price_1_20)', '20-60秒视频报价 (price_20_60)', 
+                '60秒以上视频报价 (price_60)', '预期播放量 (expected_play_num)',
+                '预期自然播放量 (expected_natural_play_num)', '推广预期播放量 (promotion_prospective_vv)',
+                '30天带货视频数 (ecom_video_product_num_30d)', '30天星图带货视频数 (star_ecom_video_num_30d)',
+                '90天组件安装完成数 (star_component_install_finish_cnt_90d)', 
+                '90天组件链接点击数 (star_component_link_click_cnt_90d)',
+                '90天视频安装>=1次数 (star_video_install_ge_1_cnt_90d)', '品牌提升播放量 (brand_boost_vv)',
+                '视频品牌提升播放量 (video_brand_boost_vv)', '页码', '性别 (gender)',
+                '达人类型 (author_type)', '账号状态 (author_status)', '达人等级 (grade)',
+                '电商功能开通 (e_commerce_enable)', '优质达人 (is_excellenct_author)',
+                '星图优质达人 (star_excellent_author)', '黑马达人 (is_black_horse_author)',
+                '共创达人 (is_cocreate_author)', 'CPM项目达人 (is_cmp_project_author)',
+                '短剧达人 (is_short_drama)', '星图私信达人 (star_whispers_author)',
+                '本地低门槛达人 (local_lower_threshold_author)', '视频品牌提升 (video_brand_boost)',
+                '预期CPA3等级 (expected_cpa3_level)', '热门视频数量', '热门视频总播放量', '热门视频平均播放量'
+            }
+            
+            decimal_fields = {
+                '15天粉丝增长率 (fans_increment_rate_within_15d)', '近30天互动率 (interact_rate_within_30d)',
+                '30天播放完成率 (play_over_rate_within_30d)', '90天星图视频互动率 (star_video_interact_rate_90d)',
+                '90天星图视频完播率 (star_video_finish_vv_rate_90d)', '星图指数 (star_index)',
+                '1-20秒预期CPM (prospective_1_20_cpm)', '20-60秒预期CPM (prospective_20_60_cpm)',
+                '60秒以上预期CPM (prospective_60_cpm)', '推广1-20秒预期CPM (promotion_prospective_1_20_cpm)',
+                '推广20-60秒预期CPM (promotion_prospective_20_60_cpm)', '推广60秒以上预期CPM (promotion_prospective_60_cpm)',
+                '链接转化指数 (link_convert_index)', '行业链接转化指数 (link_convert_index_by_industry)',
+                '购物指数 (link_shopping_index)', '传播指数 (link_spread_index)',
+                '行业传播指数 (link_spread_index_by_industry)', '链接星图指数 (link_star_index)',
+                '行业链接星图指数 (link_star_index_by_industry)', '行业推荐指数 (link_recommend_index_by_industry)',
+                '搜索后观看指数 (search_after_view_index_by_industry)', '爆文率 (burst_text_rate)'
+            }
+            
+            # 按字段顺序处理数据
+            for field in field_order:
+                value = author_data.get(field)
+                
                 if value is None or str(value).lower() == 'nan':
-                    if key in ['粉丝数 (follower)', '近30天平均播放量 (vv_median_30d)', '报价 (price)', '星图指数 (star_index)', '页码']:
-                        clean_data[key] = 0
-                    elif key == '近30天互动率 (interact_rate_within_30d)':
-                        clean_data[key] = 0.0
+                    if field in numeric_fields:
+                        clean_data[field] = 0
+                    elif field in decimal_fields:
+                        clean_data[field] = 0.0
                     else:
-                        clean_data[key] = ''
+                        clean_data[field] = ''
                 else:
-                    clean_data[key] = value
+                    clean_data[field] = value
             
             # 线程安全的文件写入
             with self.file_lock:
                 try:
                     with open(filepath, 'w', newline='', encoding='utf-8-sig') as f:
-                        writer = csv.DictWriter(f, fieldnames=clean_data.keys())
+                        writer = csv.DictWriter(f, fieldnames=field_order)
                         writer.writeheader()
                         writer.writerow(clean_data)
                         
@@ -527,6 +829,7 @@ class AsyncDarenCrawler:
                     
                 except Exception as e:
                     self.logger.error(f"保存文件失败 {filepath}: {e}")
+                    
                     
     def process_page(self, page_num: int, thread_id: int, domain_filter: str = None, crawl_date: str = None) -> tuple:
         """处理单页数据（线程工作函数）"""
