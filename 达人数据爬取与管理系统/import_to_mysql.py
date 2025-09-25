@@ -322,19 +322,36 @@ class DataImporter:
                 else:
                     processed[db_field] = None
                     
-        # 处理JSON字段
-        content_labels = self.parse_json_field(record.get('内容主题标签 (content_theme_labels_180d)', ''))
-        tags = self.parse_json_field(record.get('达人类型 (tags)', ''))
-        tags_relation = self.parse_json_field(record.get('达人标签关系 (tags_relation)', ''))
-        last_10_items = self.parse_json_field(record.get('最近10个视频 (last_10_items)', ''))
-        items = self.parse_json_field(record.get('热门视频列表 (items)', ''))
-        task_infos = self.parse_json_field(record.get('任务信息 (task_infos)', ''))
+        # 处理JSON字段 - 直接处理已经是JSON格式的字段
+        def safe_json_field(field_value):
+            """安全处理JSON字段，确保返回有效的JSON字符串"""
+            if pd.isna(field_value) or field_value is None or str(field_value).lower() == 'nan':
+                return '[]'  # 返回空数组而不是空对象
+            
+            field_str = str(field_value).strip()
+            if not field_str:
+                return '[]'
+                
+            # 如果已经是有效的JSON字符串，直接返回
+            try:
+                # 验证JSON格式并重新序列化以确保格式正确
+                parsed_data = json.loads(field_str)
+                return json.dumps(parsed_data, ensure_ascii=False, separators=(',', ':'))
+            except (json.JSONDecodeError, TypeError):
+                # 如果不是有效JSON，尝试解析为列表格式
+                try:
+                    parsed = self.parse_json_field(field_value)
+                    return json.dumps(parsed, ensure_ascii=False, separators=(',', ':'))
+                except Exception as e:
+                    self.logger.warning(f"JSON字段解析失败: {field_value[:100]}..., 错误: {e}")
+                    return '[]'
         
-        processed['content_theme_labels_180d'] = json.dumps(content_labels, ensure_ascii=False)
-        processed['tags_relation'] = json.dumps(tags_relation, ensure_ascii=False)
-        processed['last_10_items'] = json.dumps(last_10_items, ensure_ascii=False)
-        processed['items'] = json.dumps(items, ensure_ascii=False)
-        processed['task_infos'] = json.dumps(task_infos, ensure_ascii=False)
+        # 处理各种JSON字段
+        processed['content_theme_labels_180d'] = safe_json_field(record.get('内容主题标签 (content_theme_labels_180d)', ''))
+        processed['tags_relation'] = safe_json_field(record.get('达人标签关系 (tags_relation)', ''))
+        processed['last_10_items'] = safe_json_field(record.get('最近10个视频数据 (last_10_items)', ''))
+        processed['items'] = safe_json_field(record.get('热门视频列表 (items)', ''))
+        processed['task_infos'] = safe_json_field(record.get('任务信息 (task_infos)', ''))
         
         # 处理日期字段
         crawled_date = record.get('爬取日期')
@@ -358,8 +375,8 @@ class DataImporter:
         """插入单条记录到数据库"""
         try:
             with conn.cursor() as cursor:
-                # 使用 INSERT ... ON DUPLICATE KEY UPDATE 语句 - 支持完整字段
-                sql = """
+                # 先尝试插入，如果存在则更新
+                insert_sql = """
                     INSERT INTO daoren_author 
                     (star_id, nick_name, core_user_id, avatar_uri, gender, city, province, author_type, 
                      author_status, grade, follower, fans_increment_within_15d, fans_increment_within_30d,
@@ -407,99 +424,103 @@ class DataImporter:
                      %(star_component_install_finish_cnt_90d)s, %(star_component_link_click_cnt_90d)s,
                      %(star_video_install_ge_1_cnt_90d)s, %(content_theme_labels_180d)s, %(tags_relation)s,
                      %(last_10_items)s, %(items)s, %(task_infos)s, %(crawled_at)s, %(page_num)s, %(source_url)s)
-                    ON DUPLICATE KEY UPDATE
-                        nick_name = VALUES(nick_name),
-                        core_user_id = VALUES(core_user_id),
-                        avatar_uri = VALUES(avatar_uri),
-                        gender = VALUES(gender),
-                        city = VALUES(city),
-                        province = VALUES(province),
-                        author_type = VALUES(author_type),
-                        author_status = VALUES(author_status),
-                        grade = VALUES(grade),
-                        follower = VALUES(follower),
-                        fans_increment_within_15d = VALUES(fans_increment_within_15d),
-                        fans_increment_within_30d = VALUES(fans_increment_within_30d),
-                        fans_increment_rate_within_15d = VALUES(fans_increment_rate_within_15d),
-                        interact_rate_within_30d = VALUES(interact_rate_within_30d),
-                        interaction_median_30d = VALUES(interaction_median_30d),
-                        play_over_rate_within_30d = VALUES(play_over_rate_within_30d),
-                        vv_median_30d = VALUES(vv_median_30d),
-                        star_item_count_within_30d = VALUES(star_item_count_within_30d),
-                        star_video_cnt_90d = VALUES(star_video_cnt_90d),
-                        star_video_interact_rate_90d = VALUES(star_video_interact_rate_90d),
-                        star_video_finish_vv_rate_90d = VALUES(star_video_finish_vv_rate_90d),
-                        star_video_median_vv_90d = VALUES(star_video_median_vv_90d),
-                        price_1_20 = VALUES(price_1_20),
-                        price_20_60 = VALUES(price_20_60),
-                        price_60 = VALUES(price_60),
-                        assign_task_price_list = VALUES(assign_task_price_list),
-                        expected_play_num = VALUES(expected_play_num),
-                        expected_natural_play_num = VALUES(expected_natural_play_num),
-                        star_index = VALUES(star_index),
-                        prospective_1_20_cpm = VALUES(prospective_1_20_cpm),
-                        prospective_20_60_cpm = VALUES(prospective_20_60_cpm),
-                        prospective_60_cpm = VALUES(prospective_60_cpm),
-                        promotion_prospective_1_20_cpm = VALUES(promotion_prospective_1_20_cpm),
-                        promotion_prospective_20_60_cpm = VALUES(promotion_prospective_20_60_cpm),
-                        promotion_prospective_60_cpm = VALUES(promotion_prospective_60_cpm),
-                        promotion_prospective_vv = VALUES(promotion_prospective_vv),
-                        e_commerce_enable = VALUES(e_commerce_enable),
-                        author_ecom_level = VALUES(author_ecom_level),
-                        ecom_gmv_30d_range = VALUES(ecom_gmv_30d_range),
-                        ecom_avg_order_value_30d_range = VALUES(ecom_avg_order_value_30d_range),
-                        ecom_gpm_30d_range = VALUES(ecom_gpm_30d_range),
-                        ecom_video_product_num_30d = VALUES(ecom_video_product_num_30d),
-                        star_ecom_video_num_30d = VALUES(star_ecom_video_num_30d),
-                        link_convert_index = VALUES(link_convert_index),
-                        link_convert_index_by_industry = VALUES(link_convert_index_by_industry),
-                        link_shopping_index = VALUES(link_shopping_index),
-                        link_spread_index = VALUES(link_spread_index),
-                        link_spread_index_by_industry = VALUES(link_spread_index_by_industry),
-                        link_star_index = VALUES(link_star_index),
-                        link_star_index_by_industry = VALUES(link_star_index_by_industry),
-                        link_recommend_index_by_industry = VALUES(link_recommend_index_by_industry),
-                        search_after_view_index_by_industry = VALUES(search_after_view_index_by_industry),
-                        is_excellenct_author = VALUES(is_excellenct_author),
-                        star_excellent_author = VALUES(star_excellent_author),
-                        author_avatar_frame_icon = VALUES(author_avatar_frame_icon),
-                        is_black_horse_author = VALUES(is_black_horse_author),
-                        is_cocreate_author = VALUES(is_cocreate_author),
-                        is_cpm_project_author = VALUES(is_cpm_project_author),
-                        is_short_drama = VALUES(is_short_drama),
-                        star_whispers_author = VALUES(star_whispers_author),
-                        local_lower_threshold_author = VALUES(local_lower_threshold_author),
-                        burst_text_rate = VALUES(burst_text_rate),
-                        brand_boost_vv = VALUES(brand_boost_vv),
-                        video_brand_boost = VALUES(video_brand_boost),
-                        video_brand_boost_vv = VALUES(video_brand_boost_vv),
-                        expected_cpa3_level = VALUES(expected_cpa3_level),
-                        game_type = VALUES(game_type),
-                        star_component_install_finish_cnt_90d = VALUES(star_component_install_finish_cnt_90d),
-                        star_component_link_click_cnt_90d = VALUES(star_component_link_click_cnt_90d),
-                        star_video_install_ge_1_cnt_90d = VALUES(star_video_install_ge_1_cnt_90d),
-                        content_theme_labels_180d = VALUES(content_theme_labels_180d),
-                        tags_relation = VALUES(tags_relation),
-                        last_10_items = VALUES(last_10_items),
-                        items = VALUES(items),
-                        task_infos = VALUES(task_infos),
-                        crawled_at = VALUES(crawled_at),
-                        page_num = VALUES(page_num),
-                        source_url = VALUES(source_url),
-                        updated_at = CURRENT_TIMESTAMP
                 """
                 
-                cursor.execute(sql, record)
-                
-                # 检查是否是更新操作
-                if cursor.rowcount == 1:
+                try:
+                    cursor.execute(insert_sql, record)
                     self.stats['success_records'] += 1
-                elif cursor.rowcount == 2:
-                    self.stats['updated_records'] += 1
-                else:
-                    self.stats['duplicate_records'] += 1
-                    
-                return True
+                    return True
+                except pymysql.IntegrityError as ie:
+                    # 如果是重复键错误，则执行更新操作
+                    if ie.args[0] == 1062:  # Duplicate entry error
+                        update_sql = """
+                            UPDATE daoren_author SET
+                                nick_name = %(nick_name)s,
+                                core_user_id = %(core_user_id)s,
+                                avatar_uri = %(avatar_uri)s,
+                                gender = %(gender)s,
+                                city = %(city)s,
+                                province = %(province)s,
+                                author_type = %(author_type)s,
+                                author_status = %(author_status)s,
+                                grade = %(grade)s,
+                                follower = %(follower)s,
+                                fans_increment_within_15d = %(fans_increment_within_15d)s,
+                                fans_increment_within_30d = %(fans_increment_within_30d)s,
+                                fans_increment_rate_within_15d = %(fans_increment_rate_within_15d)s,
+                                interact_rate_within_30d = %(interact_rate_within_30d)s,
+                                interaction_median_30d = %(interaction_median_30d)s,
+                                play_over_rate_within_30d = %(play_over_rate_within_30d)s,
+                                vv_median_30d = %(vv_median_30d)s,
+                                star_item_count_within_30d = %(star_item_count_within_30d)s,
+                                star_video_cnt_90d = %(star_video_cnt_90d)s,
+                                star_video_interact_rate_90d = %(star_video_interact_rate_90d)s,
+                                star_video_finish_vv_rate_90d = %(star_video_finish_vv_rate_90d)s,
+                                star_video_median_vv_90d = %(star_video_median_vv_90d)s,
+                                price_1_20 = %(price_1_20)s,
+                                price_20_60 = %(price_20_60)s,
+                                price_60 = %(price_60)s,
+                                assign_task_price_list = %(assign_task_price_list)s,
+                                expected_play_num = %(expected_play_num)s,
+                                expected_natural_play_num = %(expected_natural_play_num)s,
+                                star_index = %(star_index)s,
+                                prospective_1_20_cpm = %(prospective_1_20_cpm)s,
+                                prospective_20_60_cpm = %(prospective_20_60_cpm)s,
+                                prospective_60_cpm = %(prospective_60_cpm)s,
+                                promotion_prospective_1_20_cpm = %(promotion_prospective_1_20_cpm)s,
+                                promotion_prospective_20_60_cpm = %(promotion_prospective_20_60_cpm)s,
+                                promotion_prospective_60_cpm = %(promotion_prospective_60_cpm)s,
+                                promotion_prospective_vv = %(promotion_prospective_vv)s,
+                                e_commerce_enable = %(e_commerce_enable)s,
+                                author_ecom_level = %(author_ecom_level)s,
+                                ecom_gmv_30d_range = %(ecom_gmv_30d_range)s,
+                                ecom_avg_order_value_30d_range = %(ecom_avg_order_value_30d_range)s,
+                                ecom_gpm_30d_range = %(ecom_gpm_30d_range)s,
+                                ecom_video_product_num_30d = %(ecom_video_product_num_30d)s,
+                                star_ecom_video_num_30d = %(star_ecom_video_num_30d)s,
+                                link_convert_index = %(link_convert_index)s,
+                                link_convert_index_by_industry = %(link_convert_index_by_industry)s,
+                                link_shopping_index = %(link_shopping_index)s,
+                                link_spread_index = %(link_spread_index)s,
+                                link_spread_index_by_industry = %(link_spread_index_by_industry)s,
+                                link_star_index = %(link_star_index)s,
+                                link_star_index_by_industry = %(link_star_index_by_industry)s,
+                                link_recommend_index_by_industry = %(link_recommend_index_by_industry)s,
+                                search_after_view_index_by_industry = %(search_after_view_index_by_industry)s,
+                                is_excellenct_author = %(is_excellenct_author)s,
+                                star_excellent_author = %(star_excellent_author)s,
+                                author_avatar_frame_icon = %(author_avatar_frame_icon)s,
+                                is_black_horse_author = %(is_black_horse_author)s,
+                                is_cocreate_author = %(is_cocreate_author)s,
+                                is_cpm_project_author = %(is_cpm_project_author)s,
+                                is_short_drama = %(is_short_drama)s,
+                                star_whispers_author = %(star_whispers_author)s,
+                                local_lower_threshold_author = %(local_lower_threshold_author)s,
+                                burst_text_rate = %(burst_text_rate)s,
+                                brand_boost_vv = %(brand_boost_vv)s,
+                                video_brand_boost = %(video_brand_boost)s,
+                                video_brand_boost_vv = %(video_brand_boost_vv)s,
+                                expected_cpa3_level = %(expected_cpa3_level)s,
+                                game_type = %(game_type)s,
+                                star_component_install_finish_cnt_90d = %(star_component_install_finish_cnt_90d)s,
+                                star_component_link_click_cnt_90d = %(star_component_link_click_cnt_90d)s,
+                                star_video_install_ge_1_cnt_90d = %(star_video_install_ge_1_cnt_90d)s,
+                                content_theme_labels_180d = %(content_theme_labels_180d)s,
+                                tags_relation = %(tags_relation)s,
+                                last_10_items = %(last_10_items)s,
+                                items = %(items)s,
+                                task_infos = %(task_infos)s,
+                                crawled_at = %(crawled_at)s,
+                                page_num = %(page_num)s,
+                                source_url = %(source_url)s,
+                                updated_at = CURRENT_TIMESTAMP
+                            WHERE star_id = %(star_id)s
+                        """
+                        cursor.execute(update_sql, record)
+                        self.stats['updated_records'] += 1
+                        return True
+                    else:
+                        raise ie
                 
         except Exception as e:
             self.logger.error(f"插入记录失败: {record.get('nick_name', 'unknown')}, 错误: {e}")

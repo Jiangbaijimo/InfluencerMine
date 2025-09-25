@@ -48,8 +48,8 @@ CREATE TABLE IF NOT EXISTS daoren_author (
     star_video_interact_rate_90d DECIMAL(8,6) DEFAULT 0 COMMENT '90天星图视频互动率',
     star_video_finish_vv_rate_90d DECIMAL(8,6) DEFAULT 0 COMMENT '90天星图视频完播率',
     star_video_median_vv_90d BIGINT DEFAULT 0 COMMENT '90天星图视频播放中位数',
-    content_theme_labels_180d JSON COMMENT '180天内容主题标签',
-    tags_relation JSON COMMENT '达人标签关系JSON',
+    content_theme_labels_180d TEXT COMMENT '180天内容主题标签JSON字符串',
+    tags_relation TEXT COMMENT '达人标签关系JSON字符串',
     
     -- 商业价值数据
     price_1_20 DECIMAL(12,2) DEFAULT 0 COMMENT '1-20秒视频报价',
@@ -114,9 +114,9 @@ CREATE TABLE IF NOT EXISTS daoren_author (
     star_video_install_ge_1_cnt_90d INT DEFAULT 0 COMMENT '90天视频安装>=1次数',
     
     -- 最新视频数据
-    last_10_items JSON COMMENT '最近10个视频详细数据',
-    items JSON COMMENT '热门视频列表',
-    task_infos JSON COMMENT '任务信息和价格列表',
+    last_10_items TEXT COMMENT '最近10个视频详细数据JSON字符串',
+    items TEXT COMMENT '热门视频列表JSON字符串',
+    task_infos TEXT COMMENT '任务信息和价格列表JSON字符串',
     
     -- 系统字段
     crawled_at DATE NOT NULL COMMENT '爬取日期',
@@ -139,13 +139,9 @@ CREATE TABLE IF NOT EXISTS daoren_author (
     INDEX idx_crawled_at (crawled_at DESC),
     INDEX idx_page_num (page_num),
     INDEX idx_created_at (created_at DESC),
-    INDEX idx_tags_relation ((CAST(tags_relation AS CHAR(255) ARRAY))),
     INDEX idx_is_excellent (is_excellenct_author, star_excellent_author),
     INDEX idx_ecommerce (e_commerce_enable, author_ecom_level)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='达人完整数据表-包含所有API字段';
-
--- 为 tags 字段创建多值索引（MySQL 8.0.17+）
-ALTER TABLE daoren_author ADD INDEX idx_tags ((CAST(tags AS CHAR(255) ARRAY)));
 
 -- 3. 任务日志表（支持断点续爬）
 CREATE TABLE IF NOT EXISTS daoren_task_log (
