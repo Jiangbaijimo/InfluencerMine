@@ -370,7 +370,11 @@ class DarenCrawler:
             value = data.get(key, default)
             if value is None or str(value).lower() == 'nan':
                 return default
-            return str(value).strip()
+            # 转换为字符串并去除空白，如果结果为空则返回默认值
+            str_value = str(value).strip()
+            if not str_value or str_value == '0':
+                return default if default else '未知'
+            return str_value
         
         # 提取核心字段
         parsed_data = {

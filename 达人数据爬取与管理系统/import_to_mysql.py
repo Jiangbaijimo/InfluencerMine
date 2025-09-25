@@ -79,7 +79,18 @@ class DataImporter:
         for field in required_fields:
             value = record.get(field)
             # 处理NaN值和空值
-            if pd.isna(value) or not value or str(value).strip() == '' or str(value).lower() == 'nan':
+            if pd.isna(value) or value is None or str(value).lower() == 'nan':
+                self.logger.warning(f"记录缺少必要字段 {field}: {record}")
+                return False
+            
+            # 对于昵称字段，特别处理数字0的情况
+            if field == '昵称 (nick_name)':
+                str_value = str(value).strip()
+                if not str_value or str_value == '0':
+                    self.logger.warning(f"记录缺少必要字段 {field}: {record}")
+                    return False
+            # 对于其他字段，检查是否为空字符串
+            elif isinstance(value, str) and not value.strip():
                 self.logger.warning(f"记录缺少必要字段 {field}: {record}")
                 return False
                 
@@ -406,7 +417,7 @@ class DataImporter:
         finally:
             conn.close()
             
-    def create_export_log(self, export_type: str = 'import', domain_filter: str = None):
+    def create_export_log(self, export_type: str = 'csv', domain_filter: str = None):
         """创建导出日志记录"""
         conn = self.get_db_connection()
         if not conn:
