@@ -75,6 +75,18 @@ python account_manager.py list
 # 方式1: 直接运行爬虫
 python crawler_main.py --start-page 1 --end-page 10
 
+# 基本爬取（第1页到第10页）
+python crawler_main.py --start 1 --end 10
+
+# 指定任务名称
+python crawler_main.py --start 1 --end 10 --task-name "测试爬取任务"
+
+# 使用特定账号
+python crawler_main.py --start 1 --end 10 --account-id 1
+
+# 恢复之前的任务
+python crawler_main.py --resume-task "任务名称"
+
 # 方式2: 使用任务调度器
 python task_scheduler.py start
 
